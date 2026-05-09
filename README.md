@@ -76,14 +76,25 @@ tesseract --version
 
 ### 5. Install Poppler (Required — must be installed independently)
 
-Poppler is used by `pdf2image` to convert PDF pages to images. It is also **not** a Python package.
+Poppler is used by `pdf2image` to convert PDF pages to images. It is **not** a Python package and is excluded from this repository (listed in `.gitignore`), so you must download it manually.
 
-> **Good news**: This project already ships a bundled copy of Poppler at `poppler/poppler-24.08.0/Library/bin/`. The PDF extractor will automatically detect and use it — **no extra steps needed** on your end.
+**Steps:**
 
-If you ever want to override it, set the environment variable:
-```powershell
-$env:POPPLER_PATH = "C:\path\to\your\poppler\bin"
-```
+1. Download the latest Windows build from: [https://github.com/oschwartz10612/poppler-windows/releases](https://github.com/oschwartz10612/poppler-windows/releases)
+2. Extract the zip and place the folder inside the project so the path looks like:
+   ```
+   week1/
+   └── poppler/
+       └── poppler-24.08.0/
+           └── Library/
+               └── bin/        ← poppler binaries live here
+   ```
+3. The PDF extractor (`extraction/pdf_extractor.py`) will **automatically detect** this path — no extra configuration needed.
+
+> **Alternative**: If you place Poppler somewhere else, set the environment variable to point to the `bin` folder:
+> ```powershell
+> $env:POPPLER_PATH = "C:\path\to\your\poppler\bin"
+> ```
 
 ---
 
