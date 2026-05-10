@@ -1,11 +1,16 @@
+import logging
+import numpy as np
 from PIL import Image
-import pytesseract
-import shutil
 
-tesseract = shutil.which("tesseract")
-if tesseract:
-    pytesseract.pytesseract.tesseract_cmd = tesseract
+from core.ocr_engine import ocr_image
+
+logger = logging.getLogger(__name__)
+
 
 def extract_from_image(file_path: str) -> str:
-    img = Image.open(file_path)
-    return pytesseract.image_to_string(img)
+    """Extracts text from an image file using PaddleOCR with auto GPU and auto language detection."""
+    img = Image.open(file_path).convert("RGB")
+    img_array = np.array(img)
+    text = ocr_image(img_array, hint_lang=None)
+    logger.debug("Image '%s': extracted %d chars.", file_path, len(text))
+    return text
