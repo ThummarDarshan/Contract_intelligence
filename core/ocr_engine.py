@@ -1,7 +1,6 @@
 import os
-# MUST BE SET BEFORE IMPORTING PADDLE/PADDLEOCR
 os.environ["FLAGS_allocator_strategy"] = "auto_growth"
-os.environ["FLAGS_fraction_of_gpu_memory_to_use"] = "0.1"  # Only pre-allocate 10% initially
+os.environ["FLAGS_fraction_of_gpu_memory_to_use"] = "0.1"
 
 import logging
 from functools import lru_cache
@@ -9,13 +8,12 @@ from paddleocr import PaddleOCR
 
 logger = logging.getLogger(__name__)
 
+
 def _detect_gpu() -> bool:
     """Returns True if paddlepaddle-gpu is installed and a CUDA GPU is found."""
     try:
         import paddle
         if paddle.device.is_compiled_with_cuda() and paddle.device.cuda.device_count() > 0:
-            # Free any pre-allocated memory on startup
-            paddle.device.cuda.empty_cache()
             logger.info("PaddleOCR: %d GPU(s) detected — CUDA enabled.", paddle.device.cuda.device_count())
             return True
         logger.info("PaddleOCR: No CUDA GPU found — using CPU.")
@@ -27,8 +25,6 @@ def _detect_gpu() -> bool:
 
 USE_GPU: bool = _detect_gpu()
 
-# Maps langdetect language codes → PaddleOCR lang codes.
-# Unlisted languages fall back to 'en'.
 _LANG_MAP: dict[str, str] = {
     "zh-cn": "ch",
     "zh-tw": "chinese_cht",
@@ -50,14 +46,13 @@ _LANG_MAP: dict[str, str] = {
 
 
 @lru_cache(maxsize=16)
-def _get_engine(lang: str = "en") -> PaddleOCR:
-    """Returns a cached PaddleOCR engine for the given language. Models are downloaded once and cached."""
-    logger.info("PaddleOCR: loading engine lang='%s' gpu=%s.", lang, USE_GPU)
-    return PaddleOCR(use_angle_cls=True, lang=lang, use_gpu=USE_GPU, show_log=False)
+def _get_engine(lang: str = "en", angle_cls: bool = False) -> PaddleOCR:
+    """Returns a cached PaddleOCR engine. angle_cls=False for documents, True for raw images."""
+    logger.info("PaddleOCR: loading engine lang='%s' angle_cls=%s gpu=%s.", lang, angle_cls, USE_GPU)
+    return PaddleOCR(use_angle_cls=angle_cls, lang=lang, use_gpu=USE_GPU, show_log=False)
 
 
-# Pre-warm English engine so the first real request isn't delayed by model loading.
-_get_engine("en")
+_get_engine("en", angle_cls=False)
 
 
 def _detect_language(text: str) -> str:
@@ -77,27 +72,32 @@ def _detect_language(text: str) -> str:
 
 
 def _join_result(result) -> str:
-    """Joins raw PaddleOCR result lines into a single string."""
     return "\n".join(line[1][0] for page in (result or []) if page for line in page)
 
 
-def ocr_image(img_array, hint_lang: str | None = None) -> str:
+def ocr_image(img_array, hint_lang: str | None = None, angle_cls: bool = False) -> str:
     """
-    Runs OCR on a numpy image array with automatic language detection.
+    Runs OCR on a numpy image array.
+
+    If hint_lang is provided, runs a single pass with that language model.
+    If hint_lang is None, runs Pass 1 in English, detects the language, and
+    re-runs with the correct model only if the detected language differs.
+
+    angle_cls=False for PDF/DOCX pages (upright by design).
+    angle_cls=True for raw image uploads (may be rotated).
     """
-    try:
-        initial_lang = hint_lang or "en"
-        first_text = _join_result(_get_engine(initial_lang).ocr(img_array, cls=True))
+    engine = _get_engine(hint_lang or "en", angle_cls=angle_cls)
+    text = _join_result(engine.ocr(img_array, cls=angle_cls))
 
-        detected_lang = _detect_language(first_text)
-        if detected_lang != initial_lang:
-            logger.info("Re-running OCR with lang='%s'.", detected_lang)
-            second_text = _join_result(_get_engine(detected_lang).ocr(img_array, cls=True))
-            return second_text if len(second_text) >= len(first_text) else first_text
+    if hint_lang is not None:
+        return text
 
-        return first_text
-    finally:
-        # ALWAYS release GPU memory back to Windows after processing a chunk
-        if USE_GPU:
-            import paddle
-            paddle.device.cuda.empty_cache()
+    detected_lang = _detect_language(text)
+    if detected_lang != "en":
+        logger.info("Re-running OCR with lang='%s'.", detected_lang)
+        second_text = _join_result(
+            _get_engine(detected_lang, angle_cls=angle_cls).ocr(img_array, cls=angle_cls)
+        )
+        return second_text if len(second_text) >= len(text) else text
+
+    return text
