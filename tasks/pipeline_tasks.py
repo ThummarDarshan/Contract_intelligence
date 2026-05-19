@@ -7,7 +7,7 @@ from core.redis_client import redis_client
 def process_single_file(self, file_path, job_id):
     """Celery task to process a single file through the OCR pipeline."""
     try:
-        result = run_ocr_pipeline(file_path)
+        result = run_ocr_pipeline(file_path, job_id=job_id)
         redis_client.rpush(
             f"job:{job_id}:results",
             json.dumps({"file": file_path, "result": result})

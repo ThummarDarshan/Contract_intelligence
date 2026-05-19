@@ -1,0 +1,16 @@
+.venv/
+.git/
+.cache/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+CUAD_v1/
+models/fine_tuned_legal_roberta/
+data/uploads/*
+.env
+*.ipynb
+*.md
+.gitignore
+.gitattributes
+.python-version

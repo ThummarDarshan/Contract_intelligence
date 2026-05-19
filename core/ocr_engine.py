@@ -3,6 +3,7 @@ os.environ["FLAGS_allocator_strategy"] = "auto_growth"
 os.environ["FLAGS_fraction_of_gpu_memory_to_use"] = "0.1"
 
 import logging
+import torch
 from functools import lru_cache
 from paddleocr import PaddleOCR
 
@@ -50,9 +51,6 @@ def _get_engine(lang: str = "en", angle_cls: bool = False) -> PaddleOCR:
     """Returns a cached PaddleOCR engine. angle_cls=False for documents, True for raw images."""
     logger.info("PaddleOCR: loading engine lang='%s' angle_cls=%s gpu=%s.", lang, angle_cls, USE_GPU)
     return PaddleOCR(use_angle_cls=angle_cls, lang=lang, use_gpu=USE_GPU, show_log=False)
-
-
-_get_engine("en", angle_cls=False)
 
 
 def _detect_language(text: str) -> str:

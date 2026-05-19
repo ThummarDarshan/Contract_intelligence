@@ -1,24 +1,68 @@
-# 📄 OCR Document Processing Pipeline
+# ⚖️ Contract Intelligence Platform
 
-A high-performance, asynchronous document OCR pipeline built with **FastAPI**, **Celery**, **Redis**, and **PaddleOCR**. Upload PDF, DOCX, or image files and get extracted, cleaned, and chunked text back — processed in parallel in the background with automatic **GPU acceleration** and **multi-language detection**.
+AI-powered legal contract analysis platform using **RAG (Retrieval-Augmented Generation)** and **LLM** for automated clause extraction, risk scoring, and compliance checking.
 
-> **⚠️ GitHub users**: `data/` and `CUAD_v1/` are excluded via `.gitignore`. The app creates `data/uploads/` on first run. The CUAD dataset must be downloaded via the notebook as described below.
+Upload a PDF, DOCX, or image of a legal contract and get a structured breakdown of 16 key legal categories — parties, dates, termination clauses, indemnification, IP ownership, and more — with confidence scores and automated risk flags.
+
+> **⚠️ GitHub users**: `data/`, `CUAD_v1/`, and `models/fine_tuned_legal_roberta/` are excluded via `.gitignore`. The app creates `data/uploads/` on first run. The fine-tuned model weights can be downloaded from [Google Drive (link coming soon)](#).
 
 ---
 
-## ⚡ Performance Results
+## 🎯 What It Does
 
-After migrating from Tesseract OCR to PaddleOCR with hybrid native text extraction:
+```
+Upload PDF/DOCX/Image
+        │
+        ▼
+  ┌─────────────┐
+  │  OCR / Text  │  PaddleOCR (GPU) + PyMuPDF native text
+  │  Extraction  │
+  └──────┬──────┘
+         │
+         ▼
+  ┌─────────────┐
+  │   Section-   │  Regex-based heading detection
+  │   Aware      │  (Section X, ARTICLE, numbered clauses)
+  │   Chunking   │
+  └──────┬──────┘
+         │
+         ▼
+  ┌─────────────┐
+  │   Qdrant     │  Semantic embeddings (all-MiniLM-L6-v2)
+  │   Vector DB  │  Section metadata + chunk ordering
+  └──────┬──────┘
+         │
+         ▼
+  ┌─────────────┐
+  │  RAG + LLM   │  Qwen 2.5 7B via Ollama
+  │  Extraction  │  16 CUAD categories
+  └──────┬──────┘
+         │
+         ▼
+  ┌─────────────┐
+  │    Risk      │  Automated risk flags
+  │   Scoring    │  (LOW → MEDIUM → HIGH → CRITICAL)
+  └─────────────┘
+```
 
-| Metric | Before (Tesseract) | After (PaddleOCR + Hybrid) |
-|---|---|---|
-| Digital PDF processing | 60–120 seconds | **0.28–0.35 seconds** |
-| Scanned PDF processing | 60–120 seconds | GPU-accelerated (seconds) |
-| VRAM spike | 0 GB (CPU only) | **< 1 GB** for digital PDFs |
-| Multi-language support | Manual config | Auto-detected |
-| DOCX embedded images | Not extracted | PaddleOCR via embedded image OCR |
+---
 
-**Key insight**: Most contract PDFs (CUAD dataset) are digital PDFs with embedded text. The hybrid strategy extracts native text in milliseconds with zero GPU usage, reserving OCR only for genuinely scanned pages.
+## 📊 Extraction Categories (CUAD-Based)
+
+| Group | Categories |
+|---|---|
+| **Core Identifiers** | Document Name, Parties, Effective Date, Expiration Date |
+| **Key Terms** | Governing Law, Assignment, Renewal Term |
+| **Financial Terms** | Payment Terms, Limitation of Liability, Indemnification |
+| **Restrictive Covenants** | Non-Compete, Confidentiality, Non-Solicitation |
+| **Termination** | Termination for Convenience, Termination for Cause |
+| **IP** | Intellectual Property Ownership |
+
+Each extraction includes:
+- **Extracted answer** — the actual clause text from the contract
+- **Confidence score** — HIGH / MEDIUM / LOW / NOT_FOUND
+- **Risk level** — automated flag for missing or dangerous clauses
+- **Risk flag** — human-readable description (e.g., "Allows immediate termination without notice period")
 
 ---
 
@@ -27,102 +71,99 @@ After migrating from Tesseract OCR to PaddleOCR with hybrid native text extracti
 | Layer | Technology |
 |---|---|
 | API Server | FastAPI |
-| Task Queue | Celery (gevent pool) |
-| Message Broker & Result Backend | Redis (via Docker) |
+| Task Queue | Celery (solo/gevent pool) |
+| Message Broker & Cache | Redis |
+| Vector Database | Qdrant |
+| LLM (Generative QA) | Qwen 2.5 7B via Ollama |
+| Embeddings | Sentence-Transformers (all-MiniLM-L6-v2) |
 | PDF Text Extraction | PyMuPDF (`fitz`) — native text first, OCR fallback |
-| OCR Engine | PaddleOCR (PP-OCRv4 neural network models) |
-| GPU Acceleration | PaddlePaddle-GPU (CUDA 11.8/12.x + cuDNN 8.x) |
-| DOCX Parsing | python-docx (native) + PaddleOCR (embedded images) |
+| OCR Engine | PaddleOCR (PP-OCRv4) |
+| GPU Acceleration | PaddlePaddle-GPU (CUDA 12.x) + Ollama (CUDA) |
+| DOCX Parsing | python-docx + PaddleOCR (embedded images) |
 | Language Detection | langdetect (2-pass auto-detection) |
-| Image Processing | Pillow + NumPy |
-| Python Version Manager | pyenv |
+| Fine-Tuned Model | Legal-RoBERTa fine-tuned on CUAD dataset |
+| Configuration | pydantic-settings (`.env` file) |
+| Python Version | 3.12 (managed via pyenv) |
 | Package Manager | uv |
 
 ---
 
 ## ⚙️ Prerequisites
 
-These must be installed **before** setting up the Python environment.
-
 ### 1. Docker Desktop
-Used to run Redis in a container.
+Used to run Redis and Qdrant containers.
 - Download: [https://www.docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop)
 
-### 2. pyenv (Windows)
+### 2. Ollama
+Used to run the Qwen 2.5 7B language model locally.
+- Download: [https://ollama.com/download](https://ollama.com/download)
+- After installing, pull the model:
+```powershell
+ollama pull qwen2.5:7b
+```
+
+### 3. pyenv (Windows)
 ```powershell
 Invoke-WebRequest -UseBasicParsing -Uri "https://raw.githubusercontent.com/pyenv-win/pyenv-win/master/pyenv-win/install-pyenv-win.ps1" -OutFile "./install-pyenv-win.ps1"; &"./install-pyenv-win.ps1"
 ```
-> Restart terminal after install.
 
-### 3. uv (Package Manager)
+### 4. uv (Package Manager)
 ```powershell
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
-> Restart terminal after install.
 
-### 4. GPU Setup (Optional — NVIDIA GPUs only)
+### 5. GPU Setup (Optional — NVIDIA GPUs only)
 
-> Skip this section if you have no NVIDIA GPU. The pipeline falls back to CPU automatically.
+> Skip this if you have no NVIDIA GPU. The pipeline falls back to CPU automatically.
 
-**Check your GPU**: Run `nvidia-smi`. If you see your GPU listed, proceed.
-
-> **Important**: `nvidia-smi` showing "CUDA Version: X" means your *driver* supports CUDA — the Toolkit must be installed separately.
-
-#### Step A — CUDA Toolkit 12.3
+#### CUDA Toolkit 12.3
 1. Download: [CUDA Toolkit 12.3](https://developer.nvidia.com/cuda-12-3-2-download-archive?target_os=Windows&target_arch=x86_64&target_version=11&target_type=exe_local)
 2. Run the installer → choose **Express**.
-3. Verify in a new terminal: `nvcc --version`
+3. Verify: `nvcc --version`
 
-#### Step B — cuDNN 8.9.7
-1. Download: [NVIDIA cuDNN Archive](https://developer.nvidia.com/rdp/cudnn-archive) → cuDNN v8.9.7 for CUDA 12.x → Windows Zip
-2. Extract the zip and copy its contents into CUDA (run PowerShell **as Administrator**):
+#### cuDNN 8.9.7
+1. Download: [cuDNN Archive](https://developer.nvidia.com/rdp/cudnn-archive) → cuDNN v8.9.7 for CUDA 12.x → Windows Zip
+2. Copy contents into CUDA directory (PowerShell as Administrator):
 ```powershell
 Copy-Item ".\bin\*"     "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.3\bin\"     -Force
 Copy-Item ".\include\*" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.3\include\" -Force
 Copy-Item ".\lib\x64\*" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.3\lib\x64\" -Force
 ```
-3. Open a **new terminal** after copying (existing terminals have stale PATH).
-4. Verify: `Test-Path "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.3\bin\cudnn_ops_infer64_8.dll"` → should return `True`
 
 ---
 
 ## 🚀 Setup & Run
 
-### Step 1 — Start Redis
+### Step 1 — Start Infrastructure Services
 ```powershell
+# Redis
 docker run -d --name redis-server -p 6379:6379 redis
-```
-> To restart after reboot: `docker start redis-server`
 
-### Step 2 — Install Python 3.12
+# Qdrant Vector Database
+docker run -d --name qdrant -p 6333:6333 qdrant/qdrant
+
+# Ollama (if not already running)
+ollama serve
+```
+
+### Step 2 — Install Python & Dependencies
 ```powershell
 pyenv install 3.12
 pyenv local 3.12
-```
-
-### Step 3 — Create Virtual Environment & Install Dependencies
-```powershell
 uv venv .venv
 .venv\Scripts\activate
 uv sync
 ```
-> PaddleOCR model files (~500 MB) are downloaded automatically on first document processing and cached at `C:\Users\<you>\.paddleocr\`.
+
+### Step 3 — (Optional) Download Fine-Tuned Model
+Download the pre-trained Legal-RoBERTa model from [Google Drive (link coming soon)](#) and place it in `models/fine_tuned_legal_roberta/`.
 
 ### Step 4 — (Optional) Load CUAD Dataset
 Open `load_dataset.ipynb` and run the first cell to download CUAD contracts into `CUAD_v1/`.
 
 ### Step 5 — Start Celery Worker
 ```powershell
-uv run celery -A core.celery_app worker --loglevel=info --pool=gevent --concurrency=2
-```
-
-> `--concurrency=2` is recommended for GPU mode — prevents multiple tasks from competing for VRAM simultaneously.
-
-On successful start with GPU you will see:
-```
-W0510 ... gpu_resources.cc: device: 0, cuDNN Version: 8.9.
-ppocr WARNING: The first GPU is used for inference by default, GPU ID: 0
-celery@hostname ready.
+uv run celery -A core.celery_app worker --loglevel=info --pool=solo
 ```
 
 ### Step 6 — Start FastAPI Server
@@ -131,74 +172,116 @@ uv run fastapi dev main.py
 ```
 Server: **http://127.0.0.1:8000** | Docs: **http://127.0.0.1:8000/docs**
 
-### Step 7 — Upload & Check Results
-1. Go to **http://127.0.0.1:8000** → upload a PDF, DOCX, or image.
-2. Receive a `job_id`:
-   ```json
-   { "job_id": "3f2a1b4c-..." }
-   ```
-3. Go to **http://127.0.0.1:8000/docs** → `GET /status/{job_id}` → paste ID → Execute.
-4. Response:
-   ```json
-   {
-     "status": "completed",
-     "completed": 1,
-     "total": 1,
-     "results": [
-       {
-         "file": "data/uploads/uuid_filename.pdf",
-         "result": {
-           "clean_text": "...",
-           "chunks": ["...", "..."]
-         }
-       }
-     ]
-   }
-   ```
+### Step 7 — Upload & Analyze
+1. Go to **http://127.0.0.1:8000** → upload a PDF, DOCX, or image
+2. Receive a `job_id` → check status at `GET /status/{job_id}`
+3. Once processing is complete, analyze at `GET /analyze/{job_id}`
+
+---
+
+## 🌐 API Reference
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/` | GET | HTML upload form |
+| `/upload` | POST | Upload files for processing (multipart/form-data) |
+| `/status/{job_id}` | GET | Check processing status and OCR results |
+| `/analyze/{job_id}` | GET | Run full RAG + LLM analysis (16 categories + risk scoring) |
+| `/health` | GET | Health check (Redis, Qdrant, Ollama status) |
+| `/debug/chunks/{job_id}` | GET | View stored text chunks with section metadata |
+
+### Example: `GET /analyze/{job_id}` Response
+
+```json
+{
+  "job_id": "fb5f2354-99ab-4ecf-a0a6-b649b513d340",
+  "document": {
+    "filename": "AimmuneTherapeuticsInc_Development_Agreement.pdf",
+    "total_files": 1
+  },
+  "risk_summary": {
+    "overall_risk": "HIGH",
+    "total_risk_score": 10,
+    "high_risk_flags": 2,
+    "medium_risk_flags": 0,
+    "categories_analyzed": 16
+  },
+  "extraction_results": {
+    "Document Name": {
+      "question": "What is the name or title of this contract or agreement?",
+      "extracted_answer": "LICENSE, DEVELOPMENT AND COMMERCIALIZATION AGREEMENT",
+      "confidence_score": 8,
+      "confidence_label": "HIGH",
+      "risk_level": "LOW",
+      "risk_flag": null
+    },
+    "Parties": {
+      "extracted_answer": "Xencor, Inc. and Aimmune Therapeutics, Inc.",
+      "confidence_label": "HIGH"
+    },
+    "Termination for Cause": {
+      "extracted_answer": "Either Party may terminate upon material breach with 60-day cure period (30 days for non-payment). Immediate termination for 3rd payment breach in any 3-year period.",
+      "confidence_label": "HIGH",
+      "risk_level": "HIGH",
+      "risk_flag": "Allows immediate termination without notice period"
+    }
+  }
+}
+```
 
 ---
 
 ## 📁 Project Structure
 
 ```
-week1/
-├── main.py                    # FastAPI app entry point
-├── pyproject.toml             # Project metadata & dependencies
-├── data/uploads/              # Uploaded files (auto-created)
+contract-intelligence/
+├── main.py                        # FastAPI app with health check, CORS, exception handler
+├── pyproject.toml                 # Dependencies & project metadata
+├── .env.example                   # Environment configuration template
 │
 ├── api/
-│   ├── router.py              # Combines all sub-routers
-│   ├── upload.py              # POST /upload — save files, dispatch Celery group
-│   └── status.py              # GET /status/{job_id} — poll job results from Redis
+│   ├── router.py                  # Combines all sub-routers
+│   ├── upload.py                  # POST /upload — file validation, Celery dispatch
+│   ├── status.py                  # GET /status/{job_id} — poll results from Redis
+│   ├── analyze.py                 # GET /analyze/{job_id} — RAG + LLM extraction pipeline
+│   └── models.py                  # Pydantic response models (OpenAPI schema)
 │
 ├── core/
-│   ├── celery_app.py          # Celery instance and broker config
-│   ├── ocr_engine.py          # Shared PaddleOCR engine (GPU detection, LRU cache, auto-language)
-│   └── redis_client.py        # Shared Redis client
-│
-├── ingestion/
-│   └── file_manager.py        # Saves uploaded bytes to data/uploads/ with UUID prefix
-│
-├── tasks/
-│   └── pipeline_tasks.py      # Celery task: process_single_file (with auto-retry)
-│
-├── pipeline/
-│   └── document_pipeline.py   # Orchestrates: extract → clean → chunk
+│   ├── config.py                  # Centralized settings (pydantic-settings + .env)
+│   ├── celery_app.py              # Celery instance & broker config
+│   ├── redis_client.py            # Redis connection
+│   ├── ocr_engine.py              # PaddleOCR engine (GPU auto-detect, LRU cache, multi-language)
+│   └── vector_db.py               # Qdrant client (insert, semantic search, ordered retrieval)
 │
 ├── extraction/
-│   ├── extractor.py           # Routes by file extension
-│   ├── pdf_extractor.py       # Hybrid: native text first, PaddleOCR fallback for scanned pages
-│   ├── image_extractor.py     # PNG/JPG → PaddleOCR (angle classifier enabled)
-│   └── docx_extractor.py      # python-docx (native text) + PaddleOCR (embedded images)
+│   ├── extractor.py               # Routes files to the correct extractor by extension
+│   ├── pdf_extractor.py           # Hybrid: PyMuPDF native text + PaddleOCR fallback
+│   ├── docx_extractor.py          # python-docx + OCR on embedded images
+│   └── image_extractor.py         # Direct PaddleOCR (PNG/JPG/JPEG)
 │
-└── processing/
-    ├── cleaner.py             # Normalizes whitespace
-    └── chunker.py             # Splits into ~500-char sentence-aware chunks
+├── processing/
+│   ├── cleaner.py                 # Unicode normalization, noise removal, structure preservation
+│   └── chunker.py                 # Section-aware chunking with heading detection & overlap
+│
+├── pipeline/
+│   └── document_pipeline.py       # Orchestrates: extract → clean → chunk → embed → store
+│
+├── tasks/
+│   └── pipeline_tasks.py          # Celery task with auto-retry (max 3 retries, exponential backoff)
+│
+├── models/
+│   ├── qa_pipeline.py             # Ollama (Qwen 2.5 7B) generative QA with answer cleaning
+│   ├── fine_tune.py               # Script to fine-tune Legal-RoBERTa on CUAD dataset
+│   └── fine_tuned_legal_roberta/  # Pre-trained model weights (download from Google Drive)
+│
+├── CUAD_v1/                       # CUAD dataset (download via notebook)
+├── data/uploads/                  # Uploaded files (auto-created)
+└── load_dataset.ipynb             # Notebook to download CUAD contracts
 ```
 
 ---
 
-## 🔄 Architecture & Workflow
+## 🔄 Architecture
 
 ### High-Level Architecture
 
@@ -207,94 +290,107 @@ flowchart TD
     CLIENT(["🌐 Browser / API Client"])
 
     subgraph FASTAPI["⚡ FastAPI"]
-        UPLOAD["POST /upload\nSave files → Redis job → Celery group"]
-        STATUS["GET /status/{job_id}\nRead results from Redis"]
+        UPLOAD["POST /upload"]
+        STATUS["GET /status/{job_id}"]
+        ANALYZE["GET /analyze/{job_id}"]
     end
 
-    subgraph REDIS["🗄️ Redis (Docker :6379)"]
-        RJOB["job:{id} → { status, total }"]
-        RRESULT["job:{id}:results → [ JSON per file ]"]
+    subgraph INFRA["🗄️ Infrastructure"]
+        REDIS["Redis"]
+        QDRANT["Qdrant Vector DB"]
+        OLLAMA["Ollama (Qwen 2.5 7B)"]
     end
 
-    subgraph CELERY["⚙️ Celery Worker (gevent, concurrency=2)"]
-        PIPELINE["document_pipeline.py\nextract → clean → chunk"]
-        EXTRACTOR{"Route by extension"}
-        PDF["pdf_extractor.py\nHybrid: native text + OCR fallback"]
-        DOCX["docx_extractor.py\npython-docx + OCR on embedded images"]
-        IMG["image_extractor.py\nPaddleOCR (angle_cls=True)"]
-        ENGINE["core/ocr_engine.py\nGPU auto-detect · LRU cache · auto-language"]
+    subgraph CELERY["⚙️ Celery Worker"]
+        PIPELINE["Document Pipeline"]
+        OCR["PaddleOCR Engine"]
+        EMBED["Sentence-Transformers"]
+    end
+
+    subgraph RAG["🧠 RAG Analysis"]
+        SEARCH["Semantic Search"]
+        PREAMBLE["Preamble Retrieval"]
+        LLM["LLM Extraction"]
+        RISK["Risk Scoring"]
     end
 
     CLIENT --> UPLOAD
     CLIENT --> STATUS
-    STATUS --> REDIS
-    UPLOAD --> RJOB
+    CLIENT --> ANALYZE
+    UPLOAD --> REDIS
     UPLOAD --> PIPELINE
-    PIPELINE --> EXTRACTOR
-    EXTRACTOR -- ".pdf" --> PDF
-    EXTRACTOR -- ".docx" --> DOCX
-    EXTRACTOR -- ".png/.jpg" --> IMG
-    PDF -->|scanned pages only| ENGINE
-    DOCX -->|embedded images only| ENGINE
-    IMG --> ENGINE
-    ENGINE --> RRESULT
+    PIPELINE --> OCR
+    PIPELINE --> EMBED
+    EMBED --> QDRANT
+    STATUS --> REDIS
+    ANALYZE --> SEARCH
+    SEARCH --> QDRANT
+    ANALYZE --> PREAMBLE
+    PREAMBLE --> QDRANT
+    ANALYZE --> LLM
+    LLM --> OLLAMA
+    ANALYZE --> RISK
 
     style FASTAPI fill:#1e3a5f,stroke:#4a9eff,color:#fff
-    style REDIS fill:#8b0000,stroke:#ff4444,color:#fff
+    style INFRA fill:#8b0000,stroke:#ff4444,color:#fff
     style CELERY fill:#1a4731,stroke:#4caf50,color:#fff
+    style RAG fill:#4a1a5e,stroke:#9b59b6,color:#fff
 ```
 
----
+### RAG Retrieval Strategy
 
-### PDF Hybrid Extraction Strategy
+```mermaid
+flowchart TD
+    Q["Question: 'What are the termination clauses?'"]
+    
+    Q --> SEM["Semantic Search (top-10 chunks)"]
+    Q --> SEC["Section Keyword Boost"]
+    Q --> PRE{"Preamble Category?"}
+    
+    PRE -- "Yes (Parties, Dates)" --> EARLY["Fetch first 10 chunks by document order"]
+    PRE -- "Yes" --> ALT["Alternative semantic queries"]
+    PRE -- "No" --> SKIP["Skip preamble retrieval"]
+    
+    SEM --> MERGE["Merge & Deduplicate"]
+    SEC --> MERGE
+    EARLY --> MERGE
+    ALT --> MERGE
+    SKIP --> MERGE
+    
+    MERGE --> LLM["Ollama (Qwen 2.5 7B)"]
+    LLM --> CLEAN["Answer Cleaning"]
+    CLEAN --> RISK["Risk Assessment"]
+    
+    LLM -- "NOT_FOUND" --> RETRY{"Critical Category?"}
+    RETRY -- "Yes" --> ALL["Retry with ALL chunks"]
+    ALL --> LLM
+    
+    style LLM fill:#4a1a5e,stroke:#9b59b6,color:#fff
+    style RISK fill:#8b0000,stroke:#ff4444,color:#fff
+```
+
+### PDF Hybrid Extraction
 
 ```mermaid
 flowchart TD
     A["PDF Page"] --> B["PyMuPDF page.get_text()"]
-    B --> C{"≥ 50 chars\nof native text?"}
-    C -- "Yes (digital PDF)" --> D["✅ Use native text directly\nZero GPU usage · Milliseconds"]
-    C -- "No (scanned page)" --> E["Render page at 300 DPI\nPyMuPDF → numpy array"]
-    E --> F["PaddleOCR\n(GPU · angle_cls=False)"]
-    F --> G{"Language known\nfrom previous page?"}
-    G -- "Yes" --> H["Single-pass OCR\nwith cached lang"]
-    G -- "No (first OCR page)" --> I["Pass 1 — English\nlangdetect → cache lang"]
-    I --> J{"Different\nlanguage?"}
-    J -- "Yes" --> K["Pass 2 — correct model\nReturn best result"]
-    J -- "No" --> L["Return Pass 1 text"]
+    B --> C{"≥ 50 chars native text?"}
+    C -- "Yes (digital)" --> D["✅ Use native text directly"]
+    C -- "No (scanned)" --> E["Render at 300 DPI → PaddleOCR"]
+    E --> F{"Language known?"}
+    F -- "Yes" --> G["Single-pass OCR with cached lang"]
+    F -- "No" --> H["Pass 1 (English) → langdetect"]
+    H --> I{"Non-English?"}
+    I -- "Yes" --> J["Pass 2 with correct model"]
+    I -- "No" --> K["Return Pass 1"]
 
     style D fill:#1a4731,stroke:#4caf50,color:#fff
-    style H fill:#1a4731,stroke:#4caf50,color:#fff
-    style K fill:#1a4731,stroke:#4caf50,color:#fff
-    style L fill:#1a4731,stroke:#4caf50,color:#fff
-```
-
----
-
-### OCR Engine Design (`core/ocr_engine.py`)
-
-```mermaid
-flowchart LR
-    A["ocr_image(img, hint_lang, angle_cls)"]
-
-    A --> B{"hint_lang\nprovided?"}
-    B -- "Yes" --> C["Single pass\n_get_engine(hint_lang, angle_cls)"]
-    B -- "No" --> D["Pass 1 — English\n_get_engine('en', angle_cls)"]
-    D --> E["langdetect"]
-    E --> F{"Non-English\ndetected?"}
-    F -- "No" --> G["Return Pass 1"]
-    F -- "Yes" --> H["Pass 2 — correct lang\n_get_engine(lang, angle_cls)"]
-    H --> I["Return longer result"]
-
-    C --> J["✅ Result"]
-    G --> J
-    I --> J
-
+    style G fill:#1a4731,stroke:#4caf50,color:#fff
     style J fill:#1a4731,stroke:#4caf50,color:#fff
+    style K fill:#1a4731,stroke:#4caf50,color:#fff
 ```
 
----
-
-### Request Lifecycle (Sequence)
+### Request Lifecycle
 
 ```mermaid
 sequenceDiagram
@@ -302,76 +398,70 @@ sequenceDiagram
     participant B as 🌐 Browser
     participant F as ⚡ FastAPI
     participant R as 🗄️ Redis
-    participant C as ⚙️ Celery Worker
+    participant C as ⚙️ Celery
+    participant Q as 📦 Qdrant
+    participant O as 🤖 Ollama
 
     B->>F: POST /upload (files)
-    F->>F: Save to data/uploads/ (UUID prefix)
-    F->>R: HSET job:{id} status=processing total=N
-    F->>R: Dispatch Celery group (1 task per file)
-    R-->>C: Deliver tasks
+    F->>R: Store job metadata
+    F->>C: Dispatch Celery tasks
     F-->>B: { "job_id": "..." }
 
-    Note over C: Per file (parallel across workers)
-    C->>C: PyMuPDF get_text() → native text?
-    alt Digital PDF
-        C->>C: ✅ Use native text directly (0.3s)
-    else Scanned PDF / Image
-        C->>C: Render → PaddleOCR (GPU)
-    end
-    C->>C: clean_text() + chunk_text()
-    C->>R: RPUSH job:{id}:results [JSON]
+    C->>C: Extract text (PyMuPDF / PaddleOCR)
+    C->>C: Clean → Section-aware chunk
+    C->>Q: Embed & store chunks
+    C->>R: Push results
 
-    B->>F: GET /status/{id}
-    F->>R: HGETALL + LRANGE
-    F-->>B: { status, completed, total, results }
+    B->>F: GET /status/{job_id}
+    F->>R: Read status
+    F-->>B: { "status": "completed" }
+
+    B->>F: GET /analyze/{job_id}
+    F->>Q: Semantic search (per category)
+    Q-->>F: Relevant chunks
+    F->>O: LLM extraction (16 categories)
+    O-->>F: Extracted answers
+    F->>F: Risk scoring
+    F-->>B: Full analysis JSON
 ```
 
 ---
 
-## 🌐 API Reference
+## 🤖 Models
 
-### `GET /`
-Returns an HTML upload form.
+### Primary: Qwen 2.5 7B (via Ollama)
+The main extraction engine. Uses a structured system prompt optimized for legal clause extraction with zero-temperature deterministic output.
 
-### `POST /upload`
-Accepts one or more files and queues processing. Returns `{ "job_id": "..." }`.
+**Configuration** (`models/qa_pipeline.py`):
+- Temperature: `0.0` (fully deterministic)
+- Max tokens: `512`
+- Context window: `8192`
+- Seed: `42` (reproducibility)
 
-### `GET /status/{job_id}`
-Returns processing status and results.
+### Fine-Tuned: Legal-RoBERTa on CUAD
+A `saibo-creator/legal-roberta-base` model fine-tuned on the [CUAD dataset](https://www.atticusprojectai.org/cuad) for extractive question answering on legal contracts.
 
-```json
-{
-  "status": "completed",
-  "completed": 2,
-  "total": 2,
-  "results": [
-    {
-      "file": "data/uploads/uuid_filename.pdf",
-      "result": {
-        "clean_text": "...",
-        "chunks": ["...", "..."]
-      }
-    }
-  ]
-}
-```
+**Training details** (`models/fine_tune.py`):
+- Base model: `saibo-creator/legal-roberta-base`
+- Dataset: `theatticusproject/cuad-qa` (10,000 training samples)
+- Epochs: 1
+- Batch size: 16
+- Learning rate: 2e-5
+- Mixed precision: FP16 (when GPU available)
 
-**Status values**: `processing` · `completed` · `not_found`
+The fine-tuned weights are saved to `models/fine_tuned_legal_roberta/` and can be downloaded from **[Google Drive (link coming soon)](#)**.
 
 ---
 
-## 💡 GPU Memory Behaviour
+## ⚡ Performance
 
-PaddlePaddle uses an internal CUDA memory pool. Once allocated, VRAM is **not returned to Windows** until the Celery worker process is killed — this is standard deep learning framework behaviour.
-
-| Worker State | VRAM Usage |
+| Metric | Result |
 |---|---|
-| Started (idle, models loaded) | ~6–8 GB |
-| Processing a **digital PDF** | ~6–8 GB (no spike — OCR not called) |
-| Processing a **scanned PDF / image** | ~6–8 GB (active inference within pool) |
-| Worker process killed | 0 GB |
-
-To reclaim VRAM for other applications, stop the Celery worker (`Ctrl+C`).
+| Digital PDF text extraction | **0.28–0.35 seconds** (native text, zero GPU) |
+| Full 16-category analysis | **~2-4 minutes** (depends on GPU and document length) |
+| Accuracy (tested on CUAD contracts) | **~87–90%** (14-15/16 categories correct) |
+| False positive rate | **0%** (model says NOT_FOUND when information is absent) |
+| Deterministic output | ✅ (temperature=0.0 + seed=42) |
 
 ---
 
@@ -379,19 +469,20 @@ To reclaim VRAM for other applications, stop the Celery worker (`Ctrl+C`).
 
 | Problem | Solution |
 |---|---|
-| `Could not locate cudnn_ops_infer64_8.dll` | cuDNN files not copied, or open a **new terminal** after copying (old terminals have stale PATH) |
-| `nvcc` not recognized | Install CUDA Toolkit 12.3 — `nvidia-smi` showing a CUDA version is not enough |
-| `ppocr WARNING: The first GPU is used for inference by default` | Not an error — confirms GPU is active |
-| `ModuleNotFoundError: No module named 'setuptools'` | Run `uv sync` |
+| `Cannot connect to Ollama` | Run `ollama serve` and ensure `qwen2.5:7b` is pulled |
 | `Connection refused` on Redis | Run `docker start redis-server` |
-| `FileNotFoundError` on task retry | Old task from a previous session — safe to ignore, submit a new file |
-| Models downloading on first run | PaddleOCR downloads ~500 MB once to `C:\Users\<you>\.paddleocr\` — cached forever after |
+| `Connection refused` on Qdrant | Run `docker start qdrant` |
+| `Could not locate cudnn_ops_infer64_8.dll` | Copy cuDNN files to CUDA directory, open a **new terminal** |
+| `nvcc` not recognized | Install CUDA Toolkit 12.3 |
+| PaddleOCR downloading models | First-run downloads ~500 MB to `~/.paddleocr/` (cached forever) |
+| `ModuleNotFoundError: setuptools` | Run `uv sync` |
 
 ---
 
 ## 📝 Notes
 
-- `data/uploads/` is created automatically on first run.
-- Uploaded files are stored permanently — add a cleanup routine for production.
-- `.python-version` locks Python 3.12 for this project via pyenv.
-- For production: add authentication, rate limiting, file size limits, and persistent storage.
+- `data/uploads/` is created automatically on first run
+- Uploaded files are stored permanently — add a cleanup routine for production
+- `.python-version` locks Python 3.12 via pyenv
+- All settings are configurable via `.env` file (see `.env.example`)
+- The analysis endpoint (`/analyze`) requires Ollama to be running with the Qwen model loaded

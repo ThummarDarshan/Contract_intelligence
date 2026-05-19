@@ -16,3 +16,4 @@ wheels/
 poppler/
 data/
 CUAD_v1/
+models/fine_tuned_legal_roberta
