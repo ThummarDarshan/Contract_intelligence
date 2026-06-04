@@ -20,6 +20,7 @@ def get_embedding_model():
             logger.error(f"Error loading embedding model: {e}")
     return _embedding_model
 
+# TODO: Review lazy model loading behavior and add caching fallback if needed.
 def run_ocr_pipeline(filepath, job_id=None):
     """
     Full document processing pipeline:
