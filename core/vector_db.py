@@ -70,8 +70,12 @@ def _get_search_model():
     global _search_model
     if _search_model is None:
         from sentence_transformers import SentenceTransformer
-        logger.info("Initializing search SentenceTransformer on device=cpu...")
-        _search_model = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
+        import torch
+        device = settings.embedding_device
+        if device == "auto":
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        logger.info(f"Initializing search SentenceTransformer on device={device}...")
+        _search_model = SentenceTransformer("all-MiniLM-L6-v2", device=device)
     return _search_model
 
 

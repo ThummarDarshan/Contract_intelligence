@@ -97,7 +97,11 @@ async def lifespan(app: FastAPI):
     # This prevents the TDR crash where both load simultaneously and the GPU scheduler
     # resets due to unresponsiveness, killing Ollama's CUDA context.
     try:
-        logger.info("Pre-loading SentenceTransformer embedding model on CPU...")
+        import torch
+        device = settings.embedding_device
+        if device == "auto":
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        logger.info(f"Pre-loading SentenceTransformer embedding model on device={device}...")
         from core.vector_db import _get_search_model
         await asyncio.to_thread(_get_search_model)
         logger.info("SentenceTransformer ready.")
