@@ -1,4 +1,4 @@
-# ⚖️ Zaalima Contract Intelligence & Risk Platform
+# ⚖️ ZAALIMA — Contract Intelligence & Risk Platform
 
 An AI-powered legal contract analysis platform using **RAG (Retrieval-Augmented Generation)** and **Local LLMs** for automated clause extraction, confidence indexing, risk scoring, and real-time streaming analysis.
 
@@ -125,7 +125,7 @@ The platform evaluates contracts against 16 critical risk and compliance paramet
 *   **Embeddings:** Sentence-Transformers (`all-MiniLM-L6-v2` generating 384-dimensional vectors)
 *   **Text Extraction:** PyMuPDF (`fitz`) native layout parsing with automated PaddleOCR PP-OCRv4 image render fallback.
 *   **GPU Acceleration:** NVIDIA CUDA 12.x / cuDNN 8.9.7 acceleration for PaddleOCR.
-*   **UX Interface:** Vite + React + TypeScript with glassmorphism CSS, streaming cursors, and local storage state persistence.
+*   **UX Interface:** Vite + React + TypeScript with glassmorphism CSS, Light/Dark theme toggle, streaming cursors, and local storage state persistence.
 
 ---
 
@@ -177,9 +177,14 @@ Navigate to the frontend folder, install dependencies, and start the development
 ```bash
 cd frontend
 npm install
+npm run build   # Optional: Build for production to be served by FastAPI
 npm run dev
 ```
-Open **http://localhost:5173** to view the user interface.
+
+### 5. Access the Application
+You can access the platform in two ways:
+1. **Development Server (Hot-Reloading):** Open **http://localhost:5174** (or the port Vite provides) in your browser.
+2. **Production Server:** Open **http://127.0.0.1:8000**. FastAPI will serve the optimized frontend build from the `frontend/dist` directory.
 
 ---
 
@@ -225,3 +230,15 @@ The streaming API yields real-time Server-Sent Events with standard payload wrap
 2.  **GPU-Accelerated OCR Fallback:** Removed forced CPU execution settings. PaddleOCR now hooks directly into the host system's GPU (tested on RTX 4060) utilizing native CUDA threads, cutting scanned PDF processing times by over 80%.
 3.  **Automatic Ollama Management:** FastAPI intercepts requests and checks port `11434`. If Ollama is offline, the API starts a detached Ollama background thread automatically before triggering model pre-warmups.
 4.  **Persistent Thread Workspace:** Implemented localStorage-based threads saving. Analyzed audits persist across browser reloads, allowing users to instantly load, review, or delete audit histories.
+
+---
+
+## 🛠️ Troubleshooting
+
+### Windows Folder Path Issues
+If your project is located in a folder containing an ampersand (`&`) (e.g., `f:\DS & ML\...`), default `npm` scripts like `"dev": "vite"` will fail on Windows because `cmd.exe` misinterprets the `&` in the `.bin` executable path as a command separator. 
+*Fix:* We have already updated `package.json` to bypass `.bin` shims and invoke node directly:
+```json
+"dev": "node node_modules/vite/bin/vite.js"
+```
+Ensure you do not revert this if you clone the project to a similarly named folder.
