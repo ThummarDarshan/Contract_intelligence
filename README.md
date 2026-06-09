@@ -104,12 +104,12 @@ flowchart TD
 ```mermaid
 flowchart TD
     A["PDF Page"] --> B["PyMuPDF page.get_text()"]
-    B --> C{"≥ 50 chars native text?"}
-    C -- "Yes (digital)" --> D["✅ Use native text directly"]
-    C -- "No (scanned)" --> E["Render at 300 DPI → PaddleOCR"]
+    B --> C{"&ge; 50 chars native text?"}
+    C -- "Yes (digital)" --> D["&nbsp;✅ Use native text directly"]
+    C -- "No (scanned)" --> E["Render at 300 DPI &rarr; PaddleOCR"]
     E --> F{"Language known?"}
     F -- "Yes" --> G["Single-pass OCR with cached lang"]
-    F -- "No" --> H["Pass 1 (English) → langdetect"]
+    F -- "No" --> H["Pass 1 (English) &rarr; langdetect"]
     H --> I{"Non-English?"}
     I -- "Yes" --> J["Pass 2 with correct model"]
     I -- "No" --> K["Return Pass 1"]
@@ -367,7 +367,16 @@ contract-intelligence/
 
 ---
 
-## 🛠️ Optimizations & Troubleshooting
+## 🛠️ Optimizations & Enhancements
+
+1.  **Decoupled Multi-Query Execution:** Grouped querying has been replaced with a sequential loop structure. Each legal category is audited inside its own RAG context pipeline, eliminating context window crowding and resolving false-negative `NOT_FOUND` errors.
+2.  **GPU-Accelerated OCR Fallback:** Removed forced CPU execution settings. PaddleOCR now hooks directly into the host system's GPU (tested on RTX 4060) utilizing native CUDA threads, cutting scanned PDF processing times by over 80%.
+3.  **Automatic Ollama Management:** FastAPI intercepts requests and checks port `11434`. If Ollama is offline, the API starts a detached Ollama background thread automatically before triggering model pre-warmups, removing the need for separate manual execution.
+4.  **Persistent Thread Workspace:** Implemented localStorage-based threads saving. Analyzed audits persist across browser reloads, allowing users to instantly load, review, or delete audit histories.
+
+---
+
+## 🛠️ Troubleshooting
 
 ### Windows Folder Path Issues (Ampersands)
 If your project path contains an ampersand (`&`) (e.g., `C:\ML & DS\...`), default npm scripts like `"dev": "vite"` fail on Windows because `cmd.exe` misinterprets the ampersand as a command separator. 
@@ -375,6 +384,4 @@ If your project path contains an ampersand (`&`) (e.g., `C:\ML & DS\...`), defau
 ```json
 "dev": "node node_modules/vite/bin/vite.js"
 ```
-
-### Automatic Ollama Background Startup
-FastAPI checks port `11434`. If Ollama is offline, the API starts a detached Ollama background thread automatically before triggering model pre-warmups, removing the need for separate manual execution.
+Ensure you do not revert this if you clone the project to a similarly named folder.

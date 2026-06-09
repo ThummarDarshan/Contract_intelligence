@@ -136,8 +136,9 @@ app = FastAPI(
 )
 
 
-# Serve static dashboard assets
-app.mount("/assets", StaticFiles(directory="frontend/dist/assets"), name="assets")
+# Serve static dashboard assets (only if the build directory exists)
+if Path("frontend/dist/assets").exists():
+    app.mount("/assets", StaticFiles(directory="frontend/dist/assets"), name="assets")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 

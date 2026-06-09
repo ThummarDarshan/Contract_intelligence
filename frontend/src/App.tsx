@@ -11,7 +11,7 @@ export default function App() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [selectedFilename, setSelectedFilename] = useState<string | null>(null);
-  
+
   const [analysisData, setAnalysisData] = useState<any>(null);
   const [debugData, setDebugData] = useState<any>({ total_chunks: '-', sections: [] });
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -54,7 +54,7 @@ export default function App() {
 
   const uploadFile = async (file: File) => {
     const tempId = `uploading-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-    
+
     const newJob: Job = {
       id: tempId,
       filename: file.name,
@@ -62,7 +62,7 @@ export default function App() {
       statusText: 'Uploading...',
       progress: 20
     };
-    
+
     setJobs((prev) => [newJob, ...prev]);
 
     const formData = new FormData();
@@ -110,9 +110,9 @@ export default function App() {
       try {
         const res = await fetch(`${API_BASE_URL}/status/${jobId}`);
         if (!res.ok) throw new Error('Status poll failed');
-        
+
         const data = await res.json();
-        
+
         if (data.status === 'completed') {
           window.clearInterval(intervalId);
           delete activePolls.current[jobId];
@@ -163,7 +163,7 @@ export default function App() {
         extraction_results: finalData.extraction_results,
         debugData: debugDataRef.current || { total_chunks: '-', sections: [] }
       };
-      
+
       const updated = [newThread, ...filtered];
       localStorage.setItem('zaalima_threads', JSON.stringify(updated));
       return updated;
@@ -179,14 +179,14 @@ export default function App() {
       ]);
 
       if (!analysisRes.ok) throw new Error('Analysis request failed');
-      
+
       const analysisJson = await analysisRes.json();
       const debugJson = debugRes.ok ? await debugRes.json() : { total_chunks: '-', sections: [] };
 
       setAnalysisData(analysisJson);
       setDebugData(debugJson);
       setView('dashboard');
-      
+
       saveToHistory(jobId, filename, analysisJson);
     } catch (err: any) {
       console.error('Static fallback error:', err);
@@ -227,7 +227,7 @@ export default function App() {
         status: "waiting"
       };
     }
-    
+
     setAnalysisData({
       job_id: jobId,
       risk_summary: {
@@ -239,7 +239,7 @@ export default function App() {
       },
       extraction_results: initialResults
     });
-    
+
     setView('dashboard');
 
     try {
@@ -248,7 +248,7 @@ export default function App() {
       eventSource.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          
+
           if (data.status === 'start') {
             setAnalysisData((prev: any) => {
               if (!prev) return prev;
@@ -264,7 +264,7 @@ export default function App() {
               return { ...prev, extraction_results: updatedResults };
             });
           }
-          
+
           else if (data.status === 'chunk') {
             setAnalysisData((prev: any) => {
               if (!prev) return prev;
@@ -278,7 +278,7 @@ export default function App() {
               return { ...prev, extraction_results: updatedResults };
             });
           }
-          
+
           else if (data.status === 'done') {
             setAnalysisData((prev: any) => {
               if (!prev) return prev;
@@ -294,7 +294,7 @@ export default function App() {
                   risk_flag: data.risk_flag
                 };
               }
-              
+
               const resultsList = Object.values(updatedResults);
               const highRiskCount = resultsList.filter((r: any) => r.status === 'completed' && r.risk_level === 'HIGH').length;
               const medRiskCount = resultsList.filter((r: any) => r.status === 'completed' && r.risk_level === 'MEDIUM').length;
@@ -304,7 +304,7 @@ export default function App() {
                 if (r.risk_level === 'MEDIUM') return sum + 3;
                 return sum;
               }, 0);
-              
+
               return {
                 ...prev,
                 risk_summary: {
@@ -318,11 +318,11 @@ export default function App() {
               };
             });
           }
-          
+
           else if (data.status === 'final_summary') {
             eventSource.close();
             setIsAnalyzing(false);
-            
+
             setAnalysisData((prev: any) => {
               if (!prev) return prev;
               const finalState = {
@@ -332,12 +332,12 @@ export default function App() {
                   ...data.risk_summary
                 }
               };
-              
+
               saveToHistory(jobId, filename, finalState);
               return finalState;
             });
           }
-          
+
           else if (data.status === 'error') {
             console.error('SSE backend error:', data.message);
             eventSource.close();
@@ -391,7 +391,7 @@ export default function App() {
       localStorage.setItem('zaalima_threads', JSON.stringify(updated));
       return updated;
     });
-    
+
     if (selectedJobId === threadId) {
       handleBackToUpload();
     }
@@ -406,10 +406,10 @@ export default function App() {
 
       {/* Unified workspace grid layout */}
       <div className="dashboard-view">
-        <Sidebar 
-          filename={selectedFilename || 'Contract'} 
-          jobId={selectedJobId || ''} 
-          debugData={debugData} 
+        <Sidebar
+          filename={selectedFilename || 'Contract'}
+          jobId={selectedJobId || ''}
+          debugData={debugData}
           riskSummary={analysisData?.risk_summary || { overall_risk: 'LOW', total_risk_score: 0, high_risk_flags: 0, medium_risk_flags: 0 }}
           onBackToUpload={handleBackToUpload}
           threads={threads}
@@ -417,7 +417,7 @@ export default function App() {
           onSelectThread={handleSelectThread}
           onDeleteThread={handleDeleteThread}
         />
-        
+
         <main className="main-content" style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           {view === 'upload' ? (
             <div className="glass-card" style={{ maxWidth: '800px', width: '100%', margin: '0 auto' }}>
@@ -431,7 +431,7 @@ export default function App() {
       </div>
 
       {/* Footer */}
-      <footer>
+      <footer style={{ marginTop: '40px', padding: '20px 0', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
         <p>© 2026 Zaalima Development. Confidential legal audit support agent interface.</p>
       </footer>
     </div>
