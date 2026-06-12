@@ -428,7 +428,11 @@ export default function App() {
               {pendingJobs.length > 0 && <ActiveJobs jobs={pendingJobs} onAnalyze={handleAnalyze} />}
             </div>
           ) : (
-            <Explorer results={analysisData?.extraction_results || {}} />
+            <Explorer 
+              results={analysisData?.extraction_results || {}} 
+              filename={selectedFilename || 'Contract'} 
+              riskSummary={analysisData?.risk_summary}
+            />
           )}
         </main>
       </div>
